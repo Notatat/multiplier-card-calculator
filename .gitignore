@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+*.log
+*.zip
+*.png
+*.jpg
+*.jpeg
+work/
+outputs/
+.ssh/
+.gitconfig
+.npmrc

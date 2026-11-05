@@ -1,0 +1,12 @@
+{
+  "name": "multiplier-card-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "浏览器端倍卡路线计算器",
+  "license": "MIT",
+  "scripts": {
+    "test": "node tests/solver.test.cjs && node tests/max-route-days.test.cjs && node tests/inventory.test.cjs",
+    "check": "node --check solver.js && node --check inventory.js && node --check app.js",
+    "start": "python3 -m http.server 8080 --bind 127.0.0.1"
+  }
+}

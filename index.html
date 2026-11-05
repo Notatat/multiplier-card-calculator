@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="按持卡数量计算倍卡替换路线，支持最后收尾、每日收尾和最长时长三种方案。">
+<title>翻倍卡路线计算</title>
+<link rel="stylesheet" href="style.css?v=9">
+</head>
+<body>
+<main class="workspace">
+<header class="page-header"><div><p class="eyebrow">倍卡工具</p><h1>翻倍卡路线计算</h1><p class="subtitle">填入持卡数量，找到适合你的替换顺序。</p></div><span class="header-tag">每日最多 10 次</span></header>
+<div class="notice" role="note"><span class="notice-icon" aria-hidden="true">!</span><strong>本工具根据现有规则复刻，如有问题请联系。</strong></div>
+<section class="site-info" aria-label="更新与来源">
+<div class="update-note"><span>本次更新时间 <time datetime="2026-11-05T12:49:00+08:00">2026-11-05 12:49</time></span><strong>如有新规则请谨慎参考！</strong><button id="usage-info" type="button">使用提示</button></div>
+<p class="source-note">复刻于大佬提供的思路，原帖：<a href="https://xhslink.cn/o/AX7lkBojo8v" target="_blank" rel="noopener noreferrer">倍卡叠加出计算器咯，哈哈哈哈，强中自有强中手啊 <span aria-hidden="true">↗</span></a></p>
+<p class="open-source-note">开源代码：<a href="https://github.com/Notatat/multiplier-card-calculator" target="_blank" rel="noopener noreferrer">GitHub · Multiplier Card Calculator ↗</a></p>
+</section>
+<div class="tool-grid">
+<form id="calculator" class="input-panel">
+<section class="form-section"><h2><span class="section-number">01</span>初始条件</h2>
+<div class="initial-fields">
+<label for="days">天<input id="days" type="number" min="0" max="69444" step="1" inputmode="numeric" placeholder="0" aria-label="初始天"></label>
+<label for="hours">小时<input id="hours" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" aria-label="初始小时"></label>
+<label for="minutes">分钟<input id="minutes" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" aria-label="初始分钟"></label>
+<label for="rate">倍率<select id="rate" aria-label="初始倍率" required><option value="" disabled hidden>请选择</option><option value="1">1.1倍</option><option value="2">1.2倍</option><option value="3">1.3倍</option><option value="5" selected>1.5倍</option><option value="10">2倍</option></select></label>
+</div></section>
+<section class="form-section"><div class="section-heading"><h2><span class="section-number">02</span>持有卡片</h2><span class="muted">按需追加</span></div>
+<div class="card-entry-head" aria-hidden="true"><span>时长</span><span>卡片属性</span><span>数量</span><span></span></div>
+<div id="card-rows" class="card-rows"></div>
+<button id="add-card" class="add-card" type="button">＋ 追加卡片</button>
+<p class="inventory-hint">相同卡片合并数量，2倍卡最长7天。</p>
+<label class="global-toggle" for="day-only"><input id="day-only" type="checkbox"><span><strong>仅使用天卡</strong><small>不使用5分钟倍卡</small></span></label>
+</section>
+<fieldset class="form-section mode-section"><legend><span class="section-number">03</span>选择方案</legend>
+<div class="mode-options" role="radiogroup" aria-label="计算方式">
+<label class="mode-option"><input type="radio" name="mode" value="final-double" checked aria-label="仅最后一张2倍"><span><strong>仅最后一张2倍</strong><small>只使用1张2倍卡，最后收尾</small></span></label>
+<label class="mode-option"><input type="radio" name="mode" value="daily-double" aria-label="每天2倍收尾"><span><strong>每天2倍收尾</strong><small>每天最多1张，不足时优先最后一天</small></span></label>
+<label class="mode-option"><input type="radio" name="mode" value="longest" aria-label="最长时长"><span><strong>最长时长</strong><small>允许在中途使用多张2倍卡</small></span></label>
+</div></fieldset>
+<div class="route-limit"><label for="max-route-days"><strong>路线最多天数</strong><span>限制完成路线的操作天数</span></label><input id="max-route-days" type="number" min="1" max="9999" step="1" inputmode="numeric" placeholder="不限" aria-label="路线最多天数"></div>
+<div class="actions"><button id="calculate" type="submit">计算最优路线 <span aria-hidden="true">→</span></button><button id="reset" type="reset">重置</button><button id="cancel" type="button" hidden>停止计算</button></div>
+</form>
+<section class="output-panel" aria-labelledby="output-title"><header class="output-heading"><h2 id="output-title">计算结果</h2><span id="result-badge" class="result-badge">等待计算</span></header>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="empty-state" class="empty-state"><div class="empty-mark" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><h3>你的路线，从这里开始</h3><p>填写条件、选择方案，点击计算。</p></div>
+<div id="result" hidden></div>
+</section>
+</div>
+<details class="rules"><summary>计算规则 <span aria-hidden="true">＋</span></summary><div class="rules-body"><ol>
+<li>每天最多替换10次。设置路线最多天数后，只返回该天数内能完成的路线。每日收尾方案可以提前用2倍卡结束当天，不额外增加总天数；库存不足时优先最后一天收尾。</li>
+<li>当前倍率时长超过45天，不能使用同倍率卡；1.1与1.5可以互转，转换后须满足时长上限。</li>
+<li>2倍时长超过45天后，不能再使用任何卡片；恰好45天仍可继续，初始状态也适用。</li>
+<li>1.1倍上限770天，1.5倍上限154天，2倍卡时长最多7天，2倍终点上限84天；等于上限合法，没有77天的最低要求。</li>
+<li>有2倍卡时计算所选方案下的最长2倍路线；没有2倍卡时计算最长1.5倍路线。初始2倍已锁定时保留当前状态。</li>
+<li>卡片按库存消耗。“仅使用天卡”会排除全部5分钟卡；未使用的卡片保留。</li>
+</ol><p>新时长＝原时长×（原倍率−1）÷（新倍率−1）＋卡片时长。</p><p>同样时长时优先利用更多1.5倍卡收益，再选更少步骤。分天不额外扣除现实等待时间，结果精确到秒。</p></div></details>
+</main>
+<dialog id="usage-dialog" class="usage-dialog" aria-labelledby="usage-title" aria-describedby="usage-message usage-update">
+<div class="dialog-icon" aria-hidden="true">!</div>
+<h2 id="usage-title">使用提示</h2>
+<p id="usage-message">依据现有规则及生成式AI编辑生成，仅供参考，请仔细校对！！</p>
+<p id="usage-update">本次更新时间 <time datetime="2026-11-05T12:49:00+08:00">2026-11-05 12:49</time><br><strong>如有新规则请谨慎参考！</strong></p>
+<form method="dialog"><button autofocus type="submit">知道了</button></form>
+</dialog>
+<script src="inventory.js?v=9"></script>
+<script src="app.js?v=9"></script>
+</body></html>

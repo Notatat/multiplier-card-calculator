@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict');
+const inventory=require('../inventory.js');
+const raw=Object.freeze([Object.freeze({minutes:1440,rate:2,count:2}),Object.freeze({minutes:1440,rate:2,count:5}),Object.freeze({minutes:5,rate:10,count:1})]);
+assert.deepEqual(inventory.normalize(raw),{cards:[{minutes:1440,rate:2},{minutes:5,rate:10}],counts:[7,1]});
+assert.equal(raw[0].count,2);
+assert.throws(()=>inventory.normalize([{minutes:1440,rate:2,count:9999},{minutes:1440,rate:2,count:1}]),/9999/);
+assert.deepEqual(inventory.normalize([]),{cards:[],counts:[]});
+assert.throws(()=>inventory.normalize([{minutes:1440,rate:2,count:1.5}]));
+const legacy={minutes:25,rate:2,mode:'daily-double',maxRouteDays:2,dayCardsOnly:true,counts:[1,0,2,0,0,3,0]};
+const restored=inventory.restore(legacy);
+assert.equal(restored.minutes,25);assert.equal(restored.rate,2);assert.equal(restored.mode,'daily-double');assert.equal(restored.maxRouteDays,2);assert.equal(restored.dayCardsOnly,true);
+assert.deepEqual(restored.cards,[inventory.LEGACY_CARDS[0],inventory.LEGACY_CARDS[2],inventory.LEGACY_CARDS[5]]);assert.deepEqual(restored.counts,[1,2,3]);
+assert.equal(inventory.label({minutes:1440,rate:2}),'+1天1.2倍');
+assert.equal(inventory.restore(null),null);
+assert.equal(inventory.restore({minutes:0,counts:[1]}),null);
+console.log('PASS: synthetic inventory normalization and saved-input migration');
+
+assert.throws(()=>inventory.normalize([{minutes:20160,rate:10,count:1}]),/7天/);
+const review=inventory.restore({minutes:25,rate:5,cards:[{minutes:20160,rate:10},{minutes:1440,rate:5}],counts:[1,2]});
+assert(review.needsCardReview);assert.deepEqual(review.counts,[1,2]);
