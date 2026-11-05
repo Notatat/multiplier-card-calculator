@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="按持卡数量计算倍卡替换路线，支持最后收尾、每日收尾和最长时长三种方案。">
 <title>翻倍卡路线计算</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <main class="workspace">
@@ -37,6 +37,12 @@
 <label class="mode-option"><input type="radio" name="mode" value="daily-double" aria-label="每天2倍收尾"><span><strong>每天2倍收尾</strong><small>每天最多1张，不足时优先最后一天</small></span></label>
 <label class="mode-option"><input type="radio" name="mode" value="longest" aria-label="最长时长"><span><strong>最长时长</strong><small>允许在中途使用多张2倍卡</small></span></label>
 </div></fieldset>
+<details class="advanced-settings" id="advanced-settings"><summary><span><strong>高级设置</strong><small id="limit-summary">1.1倍 770天 · 1.5倍 162天 · 2倍终点 84天</small></span><i aria-hidden="true">＋</i></summary>
+<div class="advanced-body"><div class="advanced-fields">
+<label for="limit-11">1.1倍上限（天）<input id="limit-11" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="770" placeholder="770" aria-label="1.1倍时长上限"></label>
+<label for="limit-15">1.5倍上限（天）<input id="limit-15" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="162" placeholder="162" aria-label="1.5倍时长上限"></label>
+<label class="double-end-setting" for="limit-2">2倍卡终点上限（天）<input id="limit-2" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="84" placeholder="84" aria-label="2倍卡终点上限"></label>
+</div><p>默认1.1倍770天、1.5倍162天、2倍终点84天。填写新值后按新上限计算，留空使用默认值，最多支持两位小数。</p><p>这里只修改三个时长上限，不改变每日10次、45天替换限制和单张2倍卡最长7天。自定义只用于模拟，请以实际规则为准。</p></div></details>
 <div class="route-limit"><label for="max-route-days"><strong>路线最多天数</strong><span>限制完成路线的操作天数</span></label><input id="max-route-days" type="number" min="1" max="9999" step="1" inputmode="numeric" placeholder="不限" aria-label="路线最多天数"></div>
 <div class="actions"><button id="calculate" type="submit">计算最优路线 <span aria-hidden="true">→</span></button><button id="reset" type="reset">重置</button><button id="cancel" type="button" hidden>停止计算</button></div>
 </form>
@@ -50,7 +56,7 @@
 <li>每天最多替换10次。设置路线最多天数后，只返回该天数内能完成的路线。每日收尾方案可以提前用2倍卡结束当天，不额外增加总天数；库存不足时优先最后一天收尾。</li>
 <li>当前倍率时长超过45天，不能使用同倍率卡；1.1与1.5可以互转，转换后须满足时长上限。</li>
 <li>2倍时长超过45天后，不能再使用任何卡片；恰好45天仍可继续，初始状态也适用。</li>
-<li>1.1倍上限770天，1.5倍上限154天，2倍卡时长最多7天，2倍终点上限84天；等于上限合法，没有77天的最低要求。</li>
+<li>默认上限为1.1倍770天、1.5倍162天、2倍终点84天，均可在高级设置修改。单张2倍卡时长最多7天；等于上限合法，没有77天的最低要求。</li>
 <li>有2倍卡时计算所选方案下的最长2倍路线；没有2倍卡时计算最长1.5倍路线。初始2倍已锁定时保留当前状态。</li>
 <li>卡片按库存消耗。“仅使用天卡”会排除全部5分钟卡；未使用的卡片保留。</li>
 </ol><p>新时长＝原时长×（原倍率−1）÷（新倍率−1）＋卡片时长。</p><p>同样时长时优先利用更多1.5倍卡收益，再选更少步骤。分天不额外扣除现实等待时间，结果精确到秒。</p></div></details>
@@ -62,6 +68,6 @@
 <p id="usage-update">本次更新时间 <time datetime="2026-11-05T12:49:00+08:00">2026-11-05 12:49</time><br><strong>如有新规则请谨慎参考！</strong></p>
 <form method="dialog"><button autofocus type="submit">知道了</button></form>
 </dialog>
-<script src="inventory.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="inventory.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body></html>

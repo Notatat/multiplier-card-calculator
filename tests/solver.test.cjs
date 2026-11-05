@@ -2,7 +2,9 @@
 // Dynamic-card regression uses independent ordered-path enumeration and, for
 // daily mode, enumeration of every compact partition into 1..10 operations.
 const assert=require('node:assert/strict');
-const {solve}=require('../solver.js');
+const {solve:solveCore,CARDS}=require('../solver.js');
+// This regression suite explicitly tests the former 770/154 configuration.
+const solve=(input,progress)=>solveCore({limits:{rate11Days:770,rate15Days:154},...input},progress);
 const DAY=1440,RATES=[1,2,3,5,10],MINUTES=[5,DAY,7*DAY,14*DAY];
 const allCards=MINUTES.flatMap(minutes=>RATES.map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
 const locked=input=>input.rate===10&&input.minutes>45*DAY;

@@ -2,7 +2,9 @@
 // Oracle enumerates card orders and all legal compact day partitions. The
 // budget is a bound on operation dates, never on the multiplier's duration.
 const assert=require('node:assert/strict');
-const {solve}=require('../solver.js');
+const {solve:solveCore}=require('../solver.js');
+// This regression suite explicitly tests the former 770/154 configuration.
+const solve=(input,progress)=>solveCore({limits:{rate11Days:770,rate15Days:154},...input},progress);
 const DAY=1440;
 const LEGACY=[
   {minutes:14*DAY,rate:5},{minutes:7*DAY,rate:5},{minutes:7*DAY,rate:10},

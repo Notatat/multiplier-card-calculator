@@ -17,8 +17,7 @@
     { label: '+5分钟1.5倍', minutes: 5, rate: 5 },
     { label: '+5分钟1.3倍', minutes: 5, rate: 3 }
   ];
-  const RATE_LIMIT = { 1: 770 * DAY, 5: 154 * DAY };
-  const DOUBLE_LIMIT = 84 * DAY;
+  const DEFAULT_LIMITS = { rate11Days: 770, rate15Days: 162, doubleEndDays: 84 };
 
   function laterDoubleDays(a, b) {
     for (let i = Math.max(a.length, b.length) - 1; i >= 0; i--) {
@@ -49,6 +48,29 @@
     });
   }
 
+  function normalizeLimits(raw) {
+    if (raw === null || raw === undefined) raw = {};
+    if (typeof raw !== 'object' || Array.isArray(raw)) throw Error('倍率上限设置无效');
+    const result = {};
+    for (const key of ['rate11Days', 'rate15Days', 'doubleEndDays']) {
+      const value = raw[key];
+      if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
+        result[key] = DEFAULT_LIMITS[key];
+        continue;
+      }
+      const scaled = typeof value === 'number' ? value * 100 : NaN;
+      const rounded = Math.round(scaled);
+      const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4;
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.01 || value > 99999 ||
+          Math.abs(scaled - rounded) > tolerance) {
+        const label = key === 'rate11Days' ? '1.1倍' : key === 'rate15Days' ? '1.5倍' : '2倍终点';
+        throw Error(label + '上限须为0.01～99999天的数字，最多两位小数');
+      }
+      result[key] = rounded / 100;
+    }
+    return result;
+  }
+
   function solve(input, progress) {
     if (!input || typeof input !== 'object') throw Error('输入无效');
     const cards = normalizeCards(input);
@@ -66,6 +88,9 @@
     if (maxRouteDays !== null && (!Number.isInteger(maxRouteDays) || maxRouteDays < 1 || maxRouteDays > 9999)) {
       throw Error('路线最大天数须为1～9999的整数，或留空不限');
     }
+    const limits = normalizeLimits(input.limits);
+    // Compare integer energy × 100 against integer hundredths-of-a-day limits.
+    const limitHundredths = { 1: Math.round(limits.rate11Days * 100), 5: Math.round(limits.rate15Days * 100) };
     const dayCardsOnly = input.dayCardsOnly === true;
     const daily = mode === 'daily-double';
     const counts = input.counts.map((n, i) => dayCardsOnly && cards[i].minutes === 5 ? 0 : n);
@@ -73,7 +98,7 @@
     const hasDouble = totalDoubleStock > 0;
     const initialLocked = input.rate === 10 && input.minutes > 45 * DAY;
     const targetRate = hasDouble || initialLocked ? 10 : 5;
-    const cap = targetRate === 10 ? DOUBLE_LIMIT * 10 : RATE_LIMIT[5] * 5;
+    const cap = targetRate === 10 ? Math.round(limits.doubleEndDays * 100) * DAY * 10 / 100 : limitHundredths[5] * DAY * 5 / 100;
     const initialEnergy = input.minutes * input.rate;
 
     // final-double may choose any ONE of the available double-card durations.
@@ -95,13 +120,13 @@
     const blankUsed = cards.map(() => 0);
     const totalEnergy = initialEnergy + remainingBounds({ used: blankUsed, usedDoubleCount: 0 }).remainingEnergy;
     const base = {
-      complete: true, visited: 0, found: false, hasDouble, initialLocked, mode, dayCardsOnly, maxRouteDays, cards,
-      targetDays: targetRate === 10 ? 84 : 154,
+      complete: true, visited: 0, found: false, hasDouble, initialLocked, mode, dayCardsOnly, maxRouteDays, limits, cards,
+      targetDays: targetRate === 10 ? limits.doubleEndDays : limits.rate15Days,
       upperBoundMinutes: Math.min(totalEnergy, cap) / targetRate,
       route: [], days: [], doubleEndingDays: 0,
       minutes: null, rate: targetRate, used: blankUsed
     };
-    if (RATE_LIMIT[input.rate] && input.minutes > RATE_LIMIT[input.rate]) return { ...base, reason: 'initial-limit' };
+    if (limitHundredths[input.rate] !== undefined && input.minutes * 100 > limitHundredths[input.rate] * DAY) return { ...base, reason: 'initial-limit' };
     if (initialEnergy > cap) return { ...base, reason: initialLocked ? 'locked-above-limit' : 'energy-limit' };
 
     const initial = {
@@ -190,7 +215,7 @@
         if (state.rate === card.rate && state.energy > 45 * DAY * state.rate) continue;
         const energy = state.energy + card.minutes * card.rate;
         if (energy > cap) continue;
-        if (RATE_LIMIT[card.rate] && energy > RATE_LIMIT[card.rate] * card.rate) continue;
+        if (limitHundredths[card.rate] !== undefined && energy * 100 > limitHundredths[card.rate] * DAY * card.rate) continue;
         const used = state.used.slice(); used[i]++;
         stack.push({
           used, rate: card.rate, energy,
