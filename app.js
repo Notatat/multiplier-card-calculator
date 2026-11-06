@@ -207,7 +207,7 @@ form.addEventListener('submit', event => {
   try { localStorage.setItem('myslfbk-input', JSON.stringify(input)); } catch {}
   result.hidden = true; emptyState.hidden = false; statusBox.textContent = '正在计算最优路线…'; setBadge('计算中'); submit.disabled = true; cancel.hidden = false;
   try {
-    worker = new Worker('solver.js?v=14');
+    worker = new Worker('solver.js?v=15');
     worker.onmessage = ({ data: message }) => {
       if (message.type === 'progress') { statusBox.textContent = message.data.bestDays === null ? '正在寻找符合条件的路线…' : `正在计算，已找到约 ${message.data.bestDays.toFixed(2)} 天的可行路线…`; return; }
       stop();
@@ -279,27 +279,40 @@ recordVisit();
 function animateCommunityThanks() {
   const note = document.querySelector('#community-note');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const animations = new WeakMap();
-  Array.from(note.textContent).forEach((character, index) => {
+  const characters = Array.from(note.textContent);
+  let activeLetter = null, animation = null;
+  note.replaceChildren(...characters.map((character, index) => {
     const letter = document.createElement('span');
     letter.className = 'community-letter';
-    letter.textContent = character;
     letter.style.setProperty('--letter-index', index);
-    if (index === 0) note.replaceChildren();
-    note.append(letter);
-  });
-  note.addEventListener('click', event => {
+    const glyph = document.createElement('span');
+    glyph.className = 'community-glyph';
+    glyph.textContent = character;
+    letter.append(glyph);
+    return letter;
+  }));
+  function stopWiggle() {
+    animation?.cancel();
+    animation = null;
+    activeLetter = null;
+  }
+  note.addEventListener('pointerover', event => {
     const letter = event.target.closest('.community-letter');
-    if (!letter || !note.contains(letter) || reducedMotion.matches) return;
-    animations.get(letter)?.cancel();
-    const animation = letter.animate([
+    if (!letter || !note.contains(letter) || letter === activeLetter ||
+        event.pointerType !== 'mouse' || reducedMotion.matches) return;
+    stopWiggle();
+    activeLetter = letter;
+    animation = letter.firstElementChild.animate([
       { transform: 'rotate(0deg) skewX(0deg)' },
-      { transform: 'rotate(-12deg) skewX(6deg)', offset: 0.2 },
-      { transform: 'rotate(11deg) skewX(-6deg)', offset: 0.45 },
-      { transform: 'rotate(-7deg) skewX(3deg)', offset: 0.7 },
+      { transform: 'rotate(-10deg) skewX(5deg)', offset: 0.2 },
+      { transform: 'rotate(10deg) skewX(-5deg)', offset: 0.45 },
+      { transform: 'rotate(-6deg) skewX(3deg)', offset: 0.7 },
       { transform: 'rotate(0deg) skewX(0deg)' }
-    ], { duration: 540, easing: 'ease-in-out' });
-    animations.set(letter, animation);
+    ], { duration: 650, iterations: Infinity, easing: 'ease-in-out' });
   });
+  note.addEventListener('pointerout', event => {
+    if (activeLetter && !activeLetter.contains(event.relatedTarget)) stopWiggle();
+  });
+  reducedMotion.addEventListener('change', () => { if (reducedMotion.matches) stopWiggle(); });
 }
 animateCommunityThanks();

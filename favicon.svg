@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>绿色树苗</title>
+  <rect width="64" height="64" rx="15" fill="#e7f6ec"/>
+  <path d="M31 9c-8 0-14 5-15 12-6 2-10 7-10 13 0 8 7 14 15 14h22c9 0 15-6 15-14 0-7-5-12-11-14C45 13 39 9 31 9Z" fill="#22a769"/>
+  <path d="M32 53V27m0 12L22 30m10 5 10-10" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M22 55h20" fill="none" stroke="#168453" stroke-width="4" stroke-linecap="round"/>
+</svg>
