@@ -17,7 +17,7 @@
     { label: '+5分钟1.5倍', minutes: 5, rate: 5 },
     { label: '+5分钟1.3倍', minutes: 5, rate: 3 }
   ];
-  const DEFAULT_LIMITS = { rate11Days: 770, rate15Days: 162, doubleEndDays: 84 };
+  const DEFAULT_LIMITS = { rate11Days: 770, rate12Days: 390, rate13Days: 263, rate15Days: 162, doubleBeforeDays: 45, doubleEndDays: 88 };
 
   function laterDoubleDays(a, b) {
     for (let i = Math.max(a.length, b.length) - 1; i >= 0; i--) {
@@ -52,7 +52,7 @@
     if (raw === null || raw === undefined) raw = {};
     if (typeof raw !== 'object' || Array.isArray(raw)) throw Error('倍率上限设置无效');
     const result = {};
-    for (const key of ['rate11Days', 'rate15Days', 'doubleEndDays']) {
+    for (const key of Object.keys(DEFAULT_LIMITS)) {
       const value = raw[key];
       if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) {
         result[key] = DEFAULT_LIMITS[key];
@@ -63,7 +63,7 @@
       const tolerance = Number.EPSILON * Math.max(1, Math.abs(scaled)) * 4;
       if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.01 || value > 99999 ||
           Math.abs(scaled - rounded) > tolerance) {
-        const label = key === 'rate11Days' ? '1.1倍' : key === 'rate15Days' ? '1.5倍' : '2倍终点';
+        const label = { rate11Days: '1.1倍接替前', rate12Days: '1.2倍接替前', rate13Days: '1.3倍接替前', rate15Days: '1.5倍接替前', doubleBeforeDays: '2倍接替前', doubleEndDays: '2倍终点' }[key];
         throw Error(label + '上限须为0.01～99999天的数字，最多两位小数');
       }
       result[key] = rounded / 100;
@@ -90,16 +90,26 @@
     }
     const limits = normalizeLimits(input.limits);
     // Compare integer energy × 100 against integer hundredths-of-a-day limits.
-    const limitHundredths = { 1: Math.round(limits.rate11Days * 100), 5: Math.round(limits.rate15Days * 100) };
+    const limitHundredths = {
+      1: Math.round(limits.rate11Days * 100), 2: Math.round(limits.rate12Days * 100), 3: Math.round(limits.rate13Days * 100),
+      5: Math.round(limits.rate15Days * 100), 10: Math.round(limits.doubleBeforeDays * 100)
+    };
+    const beforeLimit = (energy, rate) => energy * 100 > limitHundredths[rate] * DAY * rate;
     const dayCardsOnly = input.dayCardsOnly === true;
     const daily = mode === 'daily-double';
     const counts = input.counts.map((n, i) => dayCardsOnly && cards[i].minutes === 5 ? 0 : n);
     const totalDoubleStock = counts.reduce((sum, n, i) => sum + (cards[i].rate === 10 ? n : 0), 0);
     const hasDouble = totalDoubleStock > 0;
-    const initialLocked = input.rate === 10 && input.minutes > 45 * DAY;
+    const initialLocked = input.rate === 10 && beforeLimit(input.minutes * input.rate, input.rate);
     const targetRate = hasDouble || initialLocked ? 10 : 5;
-    const cap = targetRate === 10 ? Math.round(limits.doubleEndDays * 100) * DAY * 10 / 100 : limitHundredths[5] * DAY * 5 / 100;
     const initialEnergy = input.minutes * input.rate;
+    // A non-double endpoint can exceed a replacement-before threshold on its
+    // final step. Bound only what can enter it, never use 162 as an end cap.
+    const maxBeforeEnergy = Math.max(...ALLOWED_RATES.map(rate => limitHundredths[rate] * DAY * rate / 100));
+    const lastTargetCardEnergy = cards.reduce((max, card, i) =>
+      card.rate === targetRate && counts[i] > 0 ? Math.max(max, card.minutes * card.rate) : max, 0);
+    const cap = targetRate === 10 ? Math.round(limits.doubleEndDays * 100) * DAY * 10 / 100 :
+      Math.max(initialEnergy, maxBeforeEnergy + lastTargetCardEnergy);
 
     // final-double may choose any ONE of the available double-card durations.
     // Taking the largest available contribution gives an optimistic upper bound
@@ -121,12 +131,13 @@
     const totalEnergy = initialEnergy + remainingBounds({ used: blankUsed, usedDoubleCount: 0 }).remainingEnergy;
     const base = {
       complete: true, visited: 0, found: false, hasDouble, initialLocked, mode, dayCardsOnly, maxRouteDays, limits, cards,
-      targetDays: targetRate === 10 ? limits.doubleEndDays : limits.rate15Days,
+      beforeLimits: Object.fromEntries(ALLOWED_RATES.map(rate => [rate, limitHundredths[rate] / 100])),
+      initialReplacementBlocked: beforeLimit(initialEnergy, input.rate),
+      targetDays: targetRate === 10 ? limits.doubleEndDays : null,
       upperBoundMinutes: Math.min(totalEnergy, cap) / targetRate,
       route: [], days: [], doubleEndingDays: 0,
       minutes: null, rate: targetRate, used: blankUsed
     };
-    if (limitHundredths[input.rate] !== undefined && input.minutes * 100 > limitHundredths[input.rate] * DAY) return { ...base, reason: 'initial-limit' };
     if (initialEnergy > cap) return { ...base, reason: initialLocked ? 'locked-above-limit' : 'energy-limit' };
 
     const initial = {
@@ -174,8 +185,9 @@
       }
 
       if (mode === 'final-double' && state.usedDoubleCount > 0) continue;
-      // Above 45 days, 2x is terminal across all modes and calendar days.
-      if (state.rate === 10 && state.energy > 45 * DAY * 10) continue;
+      // Every threshold is checked against the CURRENT state, before using a
+      // card. Over-threshold states may be endpoints but cannot be expanded.
+      if (beforeLimit(state.energy, state.rate)) continue;
       if (targetRate === 10 && state.rate !== 10 && state.usedDoubleCount === totalDoubleStock) continue;
 
       const { remainingEnergy, remaining15Energy } = remainingBounds(state);
@@ -215,7 +227,6 @@
         if (state.rate === card.rate && state.energy > 45 * DAY * state.rate) continue;
         const energy = state.energy + card.minutes * card.rate;
         if (energy > cap) continue;
-        if (limitHundredths[card.rate] !== undefined && energy * 100 > limitHundredths[card.rate] * DAY * card.rate) continue;
         const used = state.used.slice(); used[i]++;
         stack.push({
           used, rate: card.rate, energy,
@@ -247,7 +258,7 @@
       doubleEndingDays: days.reduce((sum, day) => sum + Number(day.endsWithDouble), 0),
       minutes: best ? best.energy / targetRate : null,
       used: best ? best.used : base.used,
-      reason: best ? null : maxRouteDays !== null ? 'day-limit' : 'no-route'
+      reason: best ? null : base.initialReplacementBlocked ? 'replacement-limit' : maxRouteDays !== null ? 'day-limit' : 'no-route'
     };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { solve, CARDS };

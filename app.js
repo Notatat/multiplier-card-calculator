@@ -8,8 +8,13 @@ const emptyState = document.querySelector('#empty-state');
 const badge = document.querySelector('#result-badge');
 const dayOnly = document.querySelector('#day-only');
 const limit11 = document.querySelector('#limit-11');
+const limit12 = document.querySelector('#limit-12');
+const limit13 = document.querySelector('#limit-13');
 const limit15 = document.querySelector('#limit-15');
+const limit2Before = document.querySelector('#limit-2-before');
 const limit2 = document.querySelector('#limit-2');
+const defaultLimits = { rate11Days: 770, rate12Days: 390, rate13Days: 263, rate15Days: 162, doubleBeforeDays: 45, doubleEndDays: 88 };
+const limitFields = [['rate11Days', limit11], ['rate12Days', limit12], ['rate13Days', limit13], ['rate15Days', limit15], ['doubleBeforeDays', limit2Before], ['doubleEndDays', limit2]];
 const modeNames = { 'final-double': '仅最后一张2倍', 'daily-double': '每天2倍收尾', longest: '最长时长' };
 const inventory = window.CardInventory;
 const cardRows = document.querySelector('#card-rows');
@@ -23,14 +28,17 @@ function duration(minutes) {
   return `${d}天 ${h}小时 ${m}分钟${s ? ` ${s}秒` : ''}`;
 }
 function readLimits() {
-  return { rate11Days: limit11.value.trim() === '' ? null : Number(limit11.value), rate15Days: limit15.value.trim() === '' ? null : Number(limit15.value), doubleEndDays: limit2.value.trim() === '' ? null : Number(limit2.value) };
+  return Object.fromEntries(limitFields.map(([key, field]) => [key, field.value.trim() === '' ? null : Number(field.value)]));
 }
 function updateLimitSummary() {
-  document.querySelector('#limit-summary').textContent = `1.1倍 ${limit11.value.trim() || '770'}天 · 1.5倍 ${limit15.value.trim() || '162'}天 · 2倍终点 ${limit2.value.trim() || '84'}天`;
+  const value = field => field.value.trim() || String(defaultLimits[limitFields.find(([, input]) => input === field)[0]]);
+  document.querySelector('#limit-summary').textContent = `接替前 1.1倍${value(limit11)} / 1.2倍${value(limit12)} / 1.3倍${value(limit13)} / 1.5倍${value(limit15)} / 2倍${value(limit2Before)}天 · 2倍终点${value(limit2)}天`;
+  for (const [name, field] of [['11', limit11], ['12', limit12], ['13', limit13], ['15', limit15], ['2', limit2Before]]) {
+    document.querySelector(`[data-before-limit="${name}"]`).textContent = value(field);
+  }
+  document.querySelector('[data-double-end]').textContent = value(limit2);
 }
-limit11.addEventListener('input', updateLimitSummary);
-limit15.addEventListener('input', updateLimitSummary);
-limit2.addEventListener('input', updateLimitSummary);
+limitFields.forEach(([, field]) => field.addEventListener('input', updateLimitSummary));
 function rateLabel(rate) { return `${1 + rate / 10}倍`; }
 function line(tag, text, parent = result, cls = '') {
   const el = document.createElement(tag); el.textContent = text;
@@ -121,12 +129,12 @@ function metric(label, value, unit, parent) {
 }
 function render(data, input) {
   result.replaceChildren(); result.hidden = false; result.classList.remove('stale'); emptyState.hidden = true;
-  const activeLimits = { rate11Days: 770, rate15Days: 162, doubleEndDays: 84, ...data.limits };
+  const activeLimits = { ...defaultLimits, ...data.limits };
   if (!data.found) {
     setBadge(data.complete ? '暂无路线' : '尚未完成', 'warning');
     const reasons = {
-      'initial-limit': `初始${rateLabel(input.rate)}时长超过${input.rate === 5 ? activeLimits.rate15Days : activeLimits.rate11Days}天上限，请核对初始条件。`,
-      'locked-above-limit': `当前2倍已超过45天，无法继续替换；时长也超过${activeLimits.doubleEndDays}天上限，无法得到范围内的新路线。`,
+      'replacement-limit': `初始${rateLabel(input.rate)}时长超过接替前${data.beforeLimits[input.rate]}天限制，不能再使用卡片，无法转换到目标倍率。`,
+      'locked-above-limit': `当前2倍已超过接替前${activeLimits.doubleBeforeDays}天，无法继续替换；时长也超过${activeLimits.doubleEndDays}天上限，无法得到范围内的新路线。`,
       'day-limit': `未找到能在${data.maxRouteDays}天内完成且符合当前方案的路线，可调整天数或卡片后重试。`,
       'energy-limit': `初始时长折算后已超过目标${rateLabel(data.rate)}的${data.targetDays}天上限，无法通过继续加卡降低。`,
       'no-route': input.mode === 'daily-double' ? '现有卡片无法满足每日收尾条件，可核对库存或选择其他方案。' : input.mode === 'final-double' && data.hasDouble ? '仅在最后使用1张2倍卡的条件下未找到路线，可尝试其他方案。' : '现有卡片无法按规则转换到目标倍率。'
@@ -139,7 +147,7 @@ function render(data, input) {
   const cards = data.cards || input.cards;
   const days = groupRoute(data, cards);
   const usedDouble = data.used.reduce((sum, n, i) => sum + (cards[i].rate === 10 ? n : 0), 0);
-  setBadge(data.initialLocked ? '当前已锁定' : data.complete ? '当前方案最优' : '可行路线', data.complete ? 'ready' : 'warning');
+  setBadge(data.initialReplacementBlocked ? '当前已达替换限制' : data.complete ? '当前方案最优' : '可行路线', data.complete ? 'ready' : 'warning');
   const hero = line('div', '', result, 'result-hero');
   const heroTop = line('div', '', hero, 'hero-top');
   line('span', '最终倍卡时长', heroTop); line('span', rateLabel(data.rate), heroTop, 'hero-rate');
@@ -149,15 +157,15 @@ function render(data, input) {
   line('p', `结果：${duration(data.minutes)} ${rateLabel(data.rate)}`, hero, 'hero-detail');
   const metrics = line('dl', '', result, 'result-metrics');
   metric('使用天数', days.length, '天', metrics); metric('替换次数', data.route.length, '次', metrics); metric('2倍卡消耗', usedDouble, '张', metrics);
-  const modeDescription = data.initialLocked ? '当前2倍已锁定' : !data.hasDouble ? '无2倍卡，计算最长1.5倍时长' : modeNames[input.mode];
+  const modeDescription = data.initialReplacementBlocked ? '当前时长超过接替前限制，保留已有状态' : !data.hasDouble ? '无2倍卡，计算最长1.5倍时长' : modeNames[input.mode];
   line('p', `方案：${modeDescription}${input.dayCardsOnly ? ' · 仅使用天卡' : ''}`, result, 'result-meta');
   if (input.maxRouteDays) line('p', `操作天数上限：${input.maxRouteDays}天`, result, 'result-meta');
   line('p', `初始：${duration(input.minutes)} ${rateLabel(input.rate)}`, result, 'result-meta');
-  if (activeLimits.rate11Days !== 770 || activeLimits.rate15Days !== 162 || activeLimits.doubleEndDays !== 84) line('p', `自定义上限：1.1倍${activeLimits.rate11Days}天，1.5倍${activeLimits.rate15Days}天，2倍终点${activeLimits.doubleEndDays}天。`, result, 'result-alert');
+  if (Object.keys(defaultLimits).some(key => activeLimits[key] !== defaultLimits[key])) line('p', `自定义接替前限制：1.1倍${activeLimits.rate11Days}天，1.2倍${activeLimits.rate12Days}天，1.3倍${activeLimits.rate13Days}天，1.5倍${activeLimits.rate15Days}天，2倍${activeLimits.doubleBeforeDays}天；2倍终点${activeLimits.doubleEndDays}天。`, result, 'result-alert');
   if (!data.complete) line('p', '已达到本次搜索上限，这条路线可行，但尚未证明最优。', result, 'result-alert');
   if (input.mode === 'daily-double' && data.hasDouble && days.length > doubleStock(input)) line('p', '2倍卡不足以覆盖每天，已优先保留最后一天收尾。', result, 'result-alert');
-  if (data.initialLocked) line('p', '当前2倍已超过45天，不能再使用任何倍卡。', result, 'result-alert');
-  if (!data.route.length && !data.initialLocked) line('p', '无需使用卡片，当前状态已是本方案可达到的最优结果。', result, 'result-alert success');
+  if (data.initialReplacementBlocked) line('p', `当前${rateLabel(input.rate)}已超过接替前${data.beforeLimits[input.rate]}天限制，不能再使用任何倍卡。`, result, 'result-alert');
+  if (!data.route.length && !data.initialReplacementBlocked) line('p', '无需使用卡片，当前状态已是本方案可达到的最优结果。', result, 'result-alert success');
   let stepNumber = 0;
   days.forEach(day => {
     const section = line('section', '', result, 'day-block');
@@ -174,7 +182,7 @@ function render(data, input) {
       line('span', rateLabel(step.rate), row, `rate-pill${step.rate === 10 ? ' double' : ''}`);
     });
   });
-  if (data.route.length && data.rate === 10 && data.minutes > 45 * 1440) line('p', '2倍已超过45天，路线到此结束。', result, 'result-alert success');
+  if (data.route.length && data.minutes > data.beforeLimits[data.rate] * 1440) line('p', `${rateLabel(data.rate)}已超过接替前${data.beforeLimits[data.rate]}天限制，路线到此结束。`, result, 'result-alert success');
   const remaining = input.counts.map((n, i) => n - data.used[i]);
   const footer = line('div', '', result, 'remaining'); line('h3', '剩余卡片', footer);
   const remainingList = line('div', '', footer, 'remaining-list');
@@ -186,11 +194,11 @@ function render(data, input) {
   if (!remainingCount) line('span', '已全部使用', remainingList);
 }
 form.addEventListener('invalid', event => {
-  if ([limit11, limit15, limit2].includes(event.target)) document.querySelector('#advanced-settings').open = true;
+  if (limitFields.some(([, field]) => field === event.target)) document.querySelector('#advanced-settings').open = true;
 }, true);
 form.addEventListener('submit', event => {
   event.preventDefault(); stop();
-  if (!limit11.checkValidity() || !limit15.checkValidity() || !limit2.checkValidity()) document.querySelector('#advanced-settings').open = true;
+  if (limitFields.some(([, field]) => !field.checkValidity())) document.querySelector('#advanced-settings').open = true;
   if (!form.reportValidity()) return;
   const n = id => Number(document.getElementById(id).value || 0);
   let stock;
@@ -199,7 +207,7 @@ form.addEventListener('submit', event => {
   try { localStorage.setItem('myslfbk-input', JSON.stringify(input)); } catch {}
   result.hidden = true; emptyState.hidden = false; statusBox.textContent = '正在计算最优路线…'; setBadge('计算中'); submit.disabled = true; cancel.hidden = false;
   try {
-    worker = new Worker('solver.js?v=10');
+    worker = new Worker('solver.js?v=12');
     worker.onmessage = ({ data: message }) => {
       if (message.type === 'progress') { statusBox.textContent = message.data.bestDays === null ? '正在寻找符合条件的路线…' : `正在计算，已找到约 ${message.data.bestDays.toFixed(2)} 天的可行路线…`; return; }
       stop();
@@ -234,7 +242,7 @@ try {
     document.querySelector('#minutes').value = saved.minutes % 60 || '';
     saved.cards.forEach((card, i) => appendCardRow({ ...card, count: saved.counts[i] }));
     setMode(saved.mode); dayOnly.checked = saved.dayCardsOnly === true;
-    for (const [key, field] of [['rate11Days', limit11], ['rate15Days', limit15], ['doubleEndDays', limit2]]) {
+    for (const [key, field] of limitFields) {
       const value = saved.limits?.[key];
       if (typeof value === 'number' && Number.isFinite(value) && value >= 0.01 && value <= 99999 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7) field.value = value;
     }
@@ -254,3 +262,15 @@ function showUsageNotice() {
 }
 document.querySelector('#usage-info').addEventListener('click', showUsageNotice);
 showUsageNotice();
+
+async function recordVisit() {
+  const counter = document.querySelector('#visit-count');
+  try {
+    const response = await fetch('api/visits', { method: 'POST', cache: 'no-store', credentials: 'omit' });
+    if (!response.ok) throw Error('Visit counter unavailable');
+    const data = await response.json();
+    if (!Number.isSafeInteger(data.visits) || data.visits < 0) throw Error('Invalid visit count');
+    counter.textContent = data.visits.toLocaleString('zh-CN');
+  } catch { counter.textContent = '暂不可用'; }
+}
+recordVisit();

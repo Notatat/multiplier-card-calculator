@@ -4,17 +4,20 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="按持卡数量计算倍卡替换路线，支持最后收尾、每日收尾和最长时长三种方案。">
 <title>翻倍卡路线计算</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <main class="workspace">
 <header class="page-header"><div><p class="eyebrow">倍卡工具</p><h1>翻倍卡路线计算</h1><p class="subtitle">填入持卡数量，找到适合你的替换顺序。</p></div><span class="header-tag">每日最多 10 次</span></header>
 <div class="notice" role="note"><span class="notice-icon" aria-hidden="true">!</span><strong>本工具根据现有规则复刻，如有问题请联系。</strong></div>
 <section class="site-info" aria-label="更新与来源">
-<div class="update-note"><span>本次更新时间 <time datetime="2026-11-05T12:49:00+08:00">2026-11-05 12:49</time></span><strong>如有新规则请谨慎参考！</strong><button id="usage-info" type="button">使用提示</button></div>
+<div class="update-note"><span>本次更新时间 <time datetime="2026-11-06T13:51:00+08:00">2026-11-06 13:51</time></span><strong>如有新规则请谨慎参考！</strong><button id="usage-info" type="button">使用提示</button></div>
 <p class="source-note">复刻于大佬提供的思路，原帖：<a href="https://xhslink.cn/o/AX7lkBojo8v" target="_blank" rel="noopener noreferrer">倍卡叠加出计算器咯，哈哈哈哈，强中自有强中手啊 <span aria-hidden="true">↗</span></a></p>
+<p class="community-note">感谢《蚂蚁森林的小伙伴群》的群友们提供规则</p>
 <p class="open-source-note">开源代码：<a href="https://github.com/Notatat/multiplier-card-calculator" target="_blank" rel="noopener noreferrer">GitHub · Multiplier Card Calculator ↗</a></p>
+<p class="visit-note">累计访问 <strong id="visit-count" aria-live="polite">—</strong> 次 <small>每次打开或刷新加1</small></p>
 </section>
+<section class="replacement-notice" aria-labelledby="replacement-title"><h2 id="replacement-title">接替前时长限制</h2><dl class="replacement-limits"><div><dt>2倍</dt><dd><b data-before-limit="2">45</b><span>天</span></dd></div><div><dt>1.5倍</dt><dd><b data-before-limit="15">162</b><span>天</span></dd></div><div><dt>1.3倍</dt><dd><b data-before-limit="13">263</b><span>天</span></dd></div><div><dt>1.2倍</dt><dd><b data-before-limit="12">390</b><span>天</span></dd></div><div><dt>1.1倍</dt><dd><b data-before-limit="11">770</b><span>天</span></dd></div></dl><p>使用下一张卡前，当前倍率时长须不超过对应限制；等于限制可继续，超过后停止替换。超过45天仍不能叠加同倍率卡。</p><p>五种倍率的接替前限制均可在高级设置调整；2倍终点上限另为 <strong data-double-end>88</strong> 天。</p></section>
 <div class="tool-grid">
 <form id="calculator" class="input-panel">
 <section class="form-section"><h2><span class="section-number">01</span>初始条件</h2>
@@ -37,12 +40,15 @@
 <label class="mode-option"><input type="radio" name="mode" value="daily-double" aria-label="每天2倍收尾"><span><strong>每天2倍收尾</strong><small>每天最多1张，不足时优先最后一天</small></span></label>
 <label class="mode-option"><input type="radio" name="mode" value="longest" aria-label="最长时长"><span><strong>最长时长</strong><small>允许在中途使用多张2倍卡</small></span></label>
 </div></fieldset>
-<details class="advanced-settings" id="advanced-settings"><summary><span><strong>高级设置</strong><small id="limit-summary">1.1倍 770天 · 1.5倍 162天 · 2倍终点 84天</small></span><i aria-hidden="true">＋</i></summary>
+<details class="advanced-settings" id="advanced-settings"><summary><span><strong>高级设置</strong><small id="limit-summary">接替前 770 / 390 / 263 / 162 / 45天 · 2倍终点88天</small></span><i aria-hidden="true">＋</i></summary>
 <div class="advanced-body"><div class="advanced-fields">
-<label for="limit-11">1.1倍上限（天）<input id="limit-11" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="770" placeholder="770" aria-label="1.1倍时长上限"></label>
-<label for="limit-15">1.5倍上限（天）<input id="limit-15" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="162" placeholder="162" aria-label="1.5倍时长上限"></label>
-<label class="double-end-setting" for="limit-2">2倍卡终点上限（天）<input id="limit-2" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="84" placeholder="84" aria-label="2倍卡终点上限"></label>
-</div><p>默认1.1倍770天、1.5倍162天、2倍终点84天。填写新值后按新上限计算，留空使用默认值，最多支持两位小数。</p><p>这里只修改三个时长上限，不改变每日10次、45天替换限制和单张2倍卡最长7天。自定义只用于模拟，请以实际规则为准。</p></div></details>
+<label for="limit-11">1.1倍接替前限制（天）<input id="limit-11" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="770" placeholder="770" aria-label="1.1倍接替前时长限制"></label>
+<label for="limit-12">1.2倍接替前限制（天）<input id="limit-12" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="390" placeholder="390" aria-label="1.2倍接替前时长限制"></label>
+<label for="limit-13">1.3倍接替前限制（天）<input id="limit-13" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="263" placeholder="263" aria-label="1.3倍接替前时长限制"></label>
+<label for="limit-15">1.5倍接替前限制（天）<input id="limit-15" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="162" placeholder="162" aria-label="1.5倍接替前时长限制"></label>
+<label for="limit-2-before">2倍接替前限制（天）<input id="limit-2-before" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="45" placeholder="45" aria-label="2倍接替前时长限制"></label>
+<label class="double-end-setting" for="limit-2">2倍卡终点上限（天）<input id="limit-2" type="number" min="0.01" max="99999" step="0.01" inputmode="decimal" value="88" placeholder="88" aria-label="2倍卡终点上限"></label>
+</div><p>接替前默认：1.1倍770天、1.2倍390天、1.3倍263天、1.5倍162天、2倍45天。检查使用下一张卡前的当前倍率时长；最后一步可超过接替前限制并停止。2倍终点默认88天，单独限制最终结果。</p><p>六项均可填写新值，留空使用默认值，最多两位小数；上方限制表同步显示当前设置。每日10次、同倍率超过45天不能叠加、单张2倍卡最长7天保持不变。自定义仅用于模拟，请以实际规则为准。</p></div></details>
 <div class="route-limit"><label for="max-route-days"><strong>路线最多天数</strong><span>限制完成路线的操作天数</span></label><input id="max-route-days" type="number" min="1" max="9999" step="1" inputmode="numeric" placeholder="不限" aria-label="路线最多天数"></div>
 <div class="actions"><button id="calculate" type="submit">计算最优路线 <span aria-hidden="true">→</span></button><button id="reset" type="reset">重置</button><button id="cancel" type="button" hidden>停止计算</button></div>
 </form>
@@ -54,9 +60,10 @@
 </div>
 <details class="rules"><summary>计算规则 <span aria-hidden="true">＋</span></summary><div class="rules-body"><ol>
 <li>每天最多替换10次。设置路线最多天数后，只返回该天数内能完成的路线。每日收尾方案可以提前用2倍卡结束当天，不额外增加总天数；库存不足时优先最后一天收尾。</li>
-<li>当前倍率时长超过45天，不能使用同倍率卡；1.1与1.5可以互转，转换后须满足时长上限。</li>
-<li>2倍时长超过45天后，不能再使用任何卡片；恰好45天仍可继续，初始状态也适用。</li>
-<li>默认上限为1.1倍770天、1.5倍162天、2倍终点84天，均可在高级设置修改。单张2倍卡时长最多7天；等于上限合法，没有77天的最低要求。</li>
+<li>当前倍率时长超过45天，不能使用同倍率卡；不同倍率转换仍须满足当前倍率的接替前时长限制。</li>
+<li>2倍默认接替前限制45天，超过后不能再使用任何卡片；等于限制仍可继续，初始状态也适用。高级设置修改该值时，以自定义接替前限制为准。</li>
+<li>每次使用卡片前，默认检查当前倍率时长：2倍≤45天、1.5倍≤162天、1.3倍≤263天、1.2倍≤390天、1.1倍≤770天。结果超过该倍率的接替前限制时可以结束，但不能继续替换；初始超限状态同样不能替换。五种倍率的接替前限制均可在高级设置修改。</li>
+<li>2倍终点默认最多88天，可在高级设置修改，没有77天最低要求；单张2倍卡最长7天，不允许14天2倍卡。</li>
 <li>有2倍卡时计算所选方案下的最长2倍路线；没有2倍卡时计算最长1.5倍路线。初始2倍已锁定时保留当前状态。</li>
 <li>卡片按库存消耗。“仅使用天卡”会排除全部5分钟卡；未使用的卡片保留。</li>
 </ol><p>新时长＝原时长×（原倍率−1）÷（新倍率−1）＋卡片时长。</p><p>同样时长时优先利用更多1.5倍卡收益，再选更少步骤。分天不额外扣除现实等待时间，结果精确到秒。</p></div></details>
@@ -65,9 +72,9 @@
 <div class="dialog-icon" aria-hidden="true">!</div>
 <h2 id="usage-title">使用提示</h2>
 <p id="usage-message">依据现有规则及生成式AI编辑生成，仅供参考，请仔细校对！！</p>
-<p id="usage-update">本次更新时间 <time datetime="2026-11-05T12:49:00+08:00">2026-11-05 12:49</time><br><strong>如有新规则请谨慎参考！</strong></p>
+<p id="usage-update">本次更新时间 <time datetime="2026-11-06T13:51:00+08:00">2026-11-06 13:51</time><br><strong>如有新规则请谨慎参考！</strong></p>
 <form method="dialog"><button autofocus type="submit">知道了</button></form>
 </dialog>
-<script src="inventory.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="inventory.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body></html>

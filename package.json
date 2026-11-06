@@ -5,7 +5,7 @@
   "description": "浏览器端倍卡路线计算器",
   "license": "MIT",
   "scripts": {
-    "test": "node tests/solver.test.cjs && node tests/max-route-days.test.cjs && node tests/custom-limits.test.cjs && node tests/inventory.test.cjs",
+    "test": "node tests/solver.test.cjs && node tests/max-route-days.test.cjs && node tests/custom-limits.test.cjs && node tests/before-replacement-limits.test.cjs && node tests/inventory.test.cjs && python3 -B tests/visit-counter.test.py",
     "check": "node --check solver.js && node --check inventory.js && node --check app.js",
     "start": "python3 -m http.server 8080 --bind 127.0.0.1"
   }

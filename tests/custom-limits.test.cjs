@@ -1,194 +1,101 @@
 'use strict';
-// Synthetic public-safe tests. This suite uses the current defaults (770/162/84),
-// unlike older regression suites that explicitly request legacy 770/154.
-const assert=require('node:assert/strict');
-const {solve}=require('../solver.js');
-const DAY=1440;
-const defaults={rate11Days:770,rate15Days:162,doubleEndDays:84};
-const limitsOf=input=>Object.fromEntries(Object.keys(defaults).map(k=>{const v=input.limits?.[k];return[k,v===null||v===undefined||typeof v==='string'&&v.trim()===''?defaults[k]:v];}));
-const boundsOf=input=>{const l=limitsOf(input);return{1:Math.round(l.rate11Days*100),5:Math.round(l.rate15Days*100)};};
-const locked=input=>input.rate===10&&input.minutes>45*DAY;
-const effective=input=>input.counts.map((n,i)=>input.dayCardsOnly===true&&input.cards[i].minutes===5?0:n);
-const doubles=(cards,counts)=>counts.reduce((sum,n,i)=>sum+(cards[i].rate===10?n:0),0);
-const goal=input=>doubles(input.cards,effective(input))>0||locked(input)?10:5;
-const e15=(cards,used)=>used.reduce((sum,n,i)=>sum+(cards[i].rate===5?n*cards[i].minutes*5:0),0);
-const over=(energy,rate,bounds)=>bounds[rate]!==undefined&&energy*100>bounds[rate]*DAY*rate;
-const budget=input=>input.maxRouteDays===null||input.maxRouteDays===undefined||typeof input.maxRouteDays==='string'&&input.maxRouteDays.trim()===''?null:input.maxRouteDays;
-const later=(a,b)=>{for(let i=Math.max(a.length,b.length)-1;i>=0;i--){const x=a[i]??-1,y=b[i]??-1;if(x!==y)return x>y;}return false;};
-function partitions(path,cards,stock){
-  const n=path.length,d=Math.ceil(n/10),twos=path.filter(i=>cards[i].rate===10).length;
-  if(!n||cards[path[n-1]].rate!==10||twos!==Math.min(stock,d))return null;
-  let best=null;
-  function split(offset,left,dates){
-    if(!left){if(offset===n&&(!best||later(dates,best)))best=dates.slice();return;}
-    for(let count=Math.max(1,n-offset-10*(left-1));count<=Math.min(10,n-offset-(left-1));count++){
-      const chunk=path.slice(offset,offset+count),num=chunk.filter(i=>cards[i].rate===10).length,ends=cards[chunk[count-1]].rate===10;
-      if(num>1||num===1&&!ends)continue;
-      if(ends)dates.push(d-left+1);split(offset+count,left-1,dates);if(ends)dates.pop();
-    }
-  }
-  split(0,d,[]);return best;
+// All fixtures are synthetic. Thresholds apply before replacement; the only
+// separate final-duration hard ceiling is the configurable double endpoint.
+const {assert,solve,DAY,DEFAULTS,compare}=require('./before-replacement-limits.test.cjs');
+const empty={minutes:0,rate:5,cards:[],counts:[]};
+assert.deepEqual(DEFAULTS,{rate11Days:770,rate12Days:390,rate13Days:263,rate15Days:162,doubleBeforeDays:45,doubleEndDays:88});
+for(const limits of [undefined,null,{},Object.fromEntries(Object.keys(DEFAULTS).map(k=>[k,null])),Object.fromEntries(Object.keys(DEFAULTS).map(k=>[k,'  ']))]){
+  const r=compare({...empty,limits},'default or empty advanced settings');assert.deepEqual(r.limits,DEFAULTS);
 }
-function oracle(input){
-  const b=boundsOf(input),target=goal(input),cap=target===10?Math.round(limitsOf(input).doubleEndDays*100)*DAY*10/100:b[5]*DAY*5/100,mode=input.mode||'longest';
-  if(over(input.minutes*input.rate,input.rate,b))return null;
-  const cards=input.cards,left=effective(input),stock=doubles(cards,left),used=cards.map(()=>0),path=[],max=budget(input);let best=null;
-  function visit(energy,rate,used2){
-    if(max!==null&&path.length>max*10)return;
-    if(rate===target&&energy<=cap){
-      const dates=mode==='daily-double'&&stock&&!locked(input)?partitions(path,cards,stock):[];
-      if(dates!==null){const score=e15(cards,used);if(!best||energy>best.energy||energy===best.energy&&(score>best.score||score===best.score&&(path.length<best.steps||path.length===best.steps&&mode==='daily-double'&&later(dates,best.dates))))best={energy,score,steps:path.length,dates:dates.slice()};}
-    }
-    if(rate===10&&energy>450*DAY||mode==='final-double'&&used2>0||max!==null&&path.length===max*10)return;
-    for(let i=0;i<cards.length;i++){
-      const c=cards[i];if(!left[i]||rate===c.rate&&energy>45*DAY*rate)continue;
-      const next=energy+c.minutes*c.rate;if(over(next,c.rate,b))continue;
-      left[i]--;used[i]++;path.push(i);visit(next,c.rate,used2+Number(c.rate===10));path.pop();used[i]--;left[i]++;
-    }
-  }
-  visit(input.minutes*input.rate,input.rate,0);return best;
+for(const [key,rate,initialDays,raised,nextRate,expectedDays]of [
+  ['rate11Days',1,800,810,5,161],
+  ['rate12Days',2,400,410,5,161],
+  ['rate13Days',3,270,280,5,163],
+  ['rate15Days',5,170,180,10,86]
+]){
+  const input={minutes:initialDays*DAY,rate,cards:[{minutes:DAY,rate:nextRate}],counts:[1],limits:{doubleEndDays:100}};
+  const blocked=compare(input,`${key}: default before threshold blocks conversion`);assert(!blocked.found);assert.equal(blocked.reason,'replacement-limit');
+  const raisedResult=compare({...input,limits:{[key]:raised,doubleEndDays:100}},`${key}: custom threshold allows conversion`);
+  assert.equal(raisedResult.minutes,expectedDays*DAY);assert.equal(raisedResult.route.length,1);assert.equal(raisedResult.initialReplacementBlocked,false);
 }
-function validate(input,r,name){
-  const l=limitsOf(input),b=boundsOf(input),cards=input.cards;
-  assert.deepEqual(r.limits,l,`${name}: normalized limits`);assert.equal(r.rate,goal(input));assert.equal(r.targetDays,r.rate===10?l.doubleEndDays:l.rate15Days);
-  if(!r.found){assert.deepEqual(r.route,[]);return;}
-  let energy=input.minutes*input.rate,rate=input.rate;const used=cards.map(()=>0);
-  assert(!over(energy,rate,b),`${name}: initial limit`);
-  r.route.forEach((step,i)=>{
-    const c=cards[step.card];assert(c);assert(++used[step.card]<=input.counts[step.card]);
-    assert(!(rate===10&&energy>450*DAY),`${name}: 45-day lock is independent of custom caps`);
-    assert(!(rate===c.rate&&energy>45*DAY*rate),`${name}: same-rate restriction unchanged`);
-    if(input.dayCardsOnly===true)assert.notEqual(c.minutes,5);
-    energy+=c.minutes*c.rate;rate=c.rate;assert(!over(energy,rate,b),`${name}: converted limit`);
-    assert.equal(step.minutes,energy/rate);assert.equal(step.rate,rate);
-    if(input.mode==='final-double'&&c.rate===10)assert.equal(i,r.route.length-1);
-  });
-  assert.equal(rate,r.rate);assert.equal(r.minutes,energy/rate);assert.deepEqual(r.used,used);
-  if(rate===10)assert(r.minutes*100<=Math.round(l.doubleEndDays*100)*DAY,`${name}: configured double endpoint cap`);
-  assert.equal(r.days.length,Math.ceil(r.route.length/10));if(budget(input)!==null)assert(r.days.length<=budget(input));
-  assert.deepEqual(r.days.flatMap(d=>d.steps),r.route);const dates=[];
-  r.days.forEach((day,i)=>{
-    assert.equal(day.day,i+1);assert(day.steps.length>0&&day.steps.length<=10);day.steps.forEach(s=>assert.equal(s.day,day.day));
-    const end2=cards[day.steps[day.steps.length-1].card].rate===10;assert.equal(day.endsWithDouble,end2);if(end2)dates.push(day.day);
-    if(input.mode==='daily-double'){const twos=day.steps.filter(s=>cards[s.card].rate===10);assert(twos.length<=1);if(twos.length)assert.equal(twos[0],day.steps[day.steps.length-1]);}
-  });
-  const stock=doubles(cards,effective(input)),used2=doubles(cards,used);
-  if(input.mode==='final-double')assert(used2<=1);
-  if(input.mode==='daily-double'&&stock&&!locked(input)){assert.equal(used2,Math.min(stock,r.days.length));assert.equal(cards[r.route[r.route.length-1].card].rate,10);}
-  return dates;
+const held=compare({minutes:170*DAY,rate:5,cards:[{minutes:DAY,rate:1}],counts:[1],limits:{rate15Days:100}},'lower 1.5 before threshold still permits retaining the current target state');
+assert(held.found);assert.equal(held.minutes,170*DAY);assert.equal(held.route.length,0);assert(held.initialReplacementBlocked);
+// Incoming 1.5 results may exceed its before threshold, which is not an end cap.
+for(const rate15Days of [0.01,154,162,170]){
+  const r=compare({minutes:770*DAY,rate:1,cards:[{minutes:14*DAY,rate:5}],counts:[1],limits:{rate15Days}},`incoming 168-day 1.5 endpoint with before cap ${rate15Days}`);
+  assert.equal(r.minutes,168*DAY);assert.equal(r.targetDays,null);
 }
-function compare(input,name){
-  const before=JSON.stringify(input),r=solve(input),expected=oracle(input);assert.equal(JSON.stringify(input),before,`${name}: immutable input`);assert(r.complete,`${name}: tiny search complete`);
-  const dates=validate(input,r,name);assert.equal(r.found,!!expected,`${name}: found`);
-  if(expected){assert.equal(r.minutes*r.rate,expected.energy,`${name}: duration`);assert.equal(e15(input.cards,r.used),expected.score,`${name}: 1.5 preference`);assert.equal(r.route.length,expected.steps,`${name}: shortest route`);if(input.mode==='daily-double')assert.deepEqual(dates,expected.dates);}
-  return r;
-}
+const bridge={minutes:153*DAY,rate:5,cards:[{minutes:14*DAY,rate:1},{minutes:14*DAY,rate:5}],counts:[1,1]};
+const originalBridge=compare(bridge,'default 1.1 before threshold blocks returning from overshoot');
+const customBridge=compare({...bridge,limits:{rate11Days:800}},'raised 1.1 before threshold enables returning to 1.5');
+assert.equal(originalBridge.minutes,153*DAY);assert.equal(customBridge.minutes,849*DAY/5);assert(customBridge.minutes>162*DAY);
 
-// Current default 162 is intentional, and explicit former 154 remains supported.
-const defaultCap={minutes:740*DAY,rate:1,cards:[{minutes:14*DAY,rate:5}],counts:[1]};
-const current=compare(defaultCap,'default 1.5 endpoint is 162 days');assert.equal(current.minutes,162*DAY);assert.deepEqual(current.limits,defaults);
-const old=compare({...defaultCap,limits:{rate15Days:154}},'explicit former 154-day configuration');assert.equal(old.found,false);assert.equal(old.targetDays,154);
-for(const limits of [undefined,null,{}, {rate11Days:null,rate15Days:''}, {rate11Days:' ',rate15Days:undefined}]){
-  const r=compare({...defaultCap,limits},`default normalization ${JSON.stringify(limits)}`);assert.equal(r.minutes,current.minutes);assert.deepEqual(r.limits,defaults);
+// doubleBeforeDays controls replacement eligibility, not the independent
+// >45-day SAME-rate ban and not the double endpoint ceiling.
+const fifty={minutes:50*DAY,rate:10,cards:[{minutes:DAY,rate:10},{minutes:DAY,rate:5}],counts:[1,1]};
+const originallyLocked=compare(fifty,'default 45-day double before threshold');assert(originallyLocked.initialLocked);assert.equal(originallyLocked.route.length,0);
+for(const mode of ['longest','final-double','daily-double']){
+  const r=compare({...fifty,mode,limits:{doubleBeforeDays:60}},`${mode}: 50-day 2x can change multiplier with before limit 60`);
+  assert(!r.initialLocked);assert.equal(r.minutes,51.5*DAY);assert.deepEqual(r.route.map(s=>s.card),[1,0]);
 }
+const shorterBefore=compare({minutes:45*DAY,rate:10,cards:[{minutes:DAY,rate:5}],counts:[1],limits:{doubleBeforeDays:40}},'lower double before threshold locks without invalidating current endpoint');
+assert(shorterBefore.initialLocked);assert.equal(shorterBefore.minutes,45*DAY);assert.equal(shorterBefore.route.length,0);
+const same15=compare({minutes:170*DAY,rate:5,cards:[{minutes:DAY,rate:5},{minutes:DAY,rate:10}],counts:[1,1],limits:{rate15Days:200,doubleEndDays:100}},'raising before threshold never relaxes same-rate 45-day restriction');
+assert.equal(same15.used[0],0);assert.equal(same15.minutes,86*DAY);
 
-const high11={minutes:800*DAY,rate:1,cards:[{minutes:DAY,rate:10}],counts:[1]};
-assert.equal(compare(high11,'default 1.1 initial limit').reason,'initial-limit');
-const raised11=compare({...high11,limits:{rate11Days:1000}},'raise 1.1 initial limit');assert.equal(raised11.minutes,81*DAY);
-assert.equal(compare({minutes:700*DAY,rate:1,cards:[],counts:[],limits:{rate11Days:600}},'lower 1.1 initial limit').reason,'initial-limit');
-const high15={minutes:165*DAY,rate:5,cards:[{minutes:DAY,rate:10}],counts:[1]};
-assert.equal(compare(high15,'default 1.5 initial limit').reason,'initial-limit');
-const raised15=compare({...high15,limits:{rate15Days:170}},'raise 1.5 initial limit');assert.equal(raised15.minutes,83.5*DAY);
-assert.equal(compare({minutes:160*DAY,rate:5,cards:[],counts:[],limits:{rate15Days:154}},'lower 1.5 initial limit').reason,'initial-limit');
-
-const bridge11={minutes:153*DAY,rate:5,cards:[{minutes:14*DAY,rate:1},{minutes:DAY,rate:10}],counts:[1,1]};
-const bridgeDefault=compare(bridge11,'default 1.1 bridge cap'),bridgeRaised=compare({...bridge11,limits:{rate11Days:800}},'raised 1.1 bridge cap');
-assert.equal(bridgeDefault.used[0],0);assert.equal(bridgeRaised.used[0],1);assert.equal(bridgeRaised.minutes,789*DAY/10);
-const bridge15={minutes:770*DAY,rate:1,cards:[{minutes:14*DAY,rate:5}],counts:[1]};
-assert(!compare(bridge15,'default 1.5 bridge cap').found);
-const bridge15Raised=compare({...bridge15,limits:{rate15Days:170}},'custom 1.5 bridge and final target cap');assert.equal(bridge15Raised.minutes,168*DAY);assert.equal(bridge15Raised.targetDays,170);
-const lower15=compare({minutes:750*DAY,rate:1,cards:[{minutes:7*DAY,rate:5}],counts:[1],limits:{rate15Days:157}},'exact custom 157-day 1.5 cap');assert.equal(lower15.minutes,157*DAY);
-assert(!compare({minutes:750*DAY,rate:1,cards:[{minutes:7*DAY,rate:5}],counts:[1],limits:{rate15Days:156.99}},'custom 1.5 cap just below endpoint').found);
-
-// Decimal limits are compared with integer hundredths; no minute rounding is allowed.
-const exact11={minutes:67,rate:1,cards:[{minutes:5,rate:1},{minutes:5,rate:5}],counts:[1,1],limits:{rate11Days:0.05}};
-const at11=compare(exact11,'1.1 exact 0.05-day boundary');assert.equal(at11.route[0].minutes,72);assert.equal(at11.used[0],1);
-const over11=compare({...exact11,minutes:68},'1.1 one minute beyond decimal boundary');assert.equal(over11.used[0],0);
-const exact15={minutes:335,rate:1,cards:[{minutes:5,rate:5}],counts:[1],limits:{rate15Days:0.05}};
-assert.equal(compare(exact15,'1.5 exact 0.05-day boundary').minutes,72);
-assert(!compare({...exact15,minutes:336},'1.5 endpoint 0.2 minute over decimal boundary').found);
-const tiny=compare({minutes:0,rate:5,cards:[{minutes:5,rate:5}],counts:[3],limits:{rate15Days:0.01}},'minimum custom cap still preserves fractions');assert.equal(tiny.minutes,10);assert.equal(tiny.used[0],2);
-for(const value of [0.01,0.29,1.23,99998.99,99999]){
-  const r=compare({minutes:0,rate:5,cards:[],counts:[],limits:{rate11Days:value,rate15Days:value}},`valid decimal ${value}`);assert.deepEqual(r.limits,{rate11Days:value,rate15Days:value,doubleEndDays:84});
+// Fractional thresholds are checked against the pre-card energy exactly.
+const eleven={minutes:67,rate:1,cards:[{minutes:5,rate:1},{minutes:5,rate:5}],counts:[2,1],limits:{rate11Days:0.05}};
+const exact11=compare(eleven,'exact decimal 1.1 before threshold');assert.equal(exact11.minutes,19.4);assert.equal(exact11.used[0],1);
+assert.equal(compare({...eleven,minutes:68},'one-minute excess prevents returning through 1.1').used[0],0);
+const fifteen={minutes:335,rate:1,cards:[{minutes:5,rate:5}],counts:[2],limits:{rate15Days:0.05}};
+assert.equal(compare(fifteen,'exact decimal 1.5 before threshold allows one final overshoot').minutes,77);
+assert.equal(compare({...fifteen,minutes:336},'fractional overshoot is a valid endpoint but cannot continue').minutes,72.2);
+const tiny=compare({minutes:0,rate:5,cards:[{minutes:5,rate:5}],counts:[5],limits:{rate15Days:0.01}},'minimum threshold is checked before, not after the final card');assert.equal(tiny.minutes,15);assert.equal(tiny.used[0],3);
+for(const [key,rate]of [['rate12Days',2],['rate13Days',3]]){
+  const input={minutes:72,rate,cards:[{minutes:5,rate:5}],counts:[1],limits:{[key]:0.05}};
+  assert(compare(input,`${key}: exact 72-minute threshold`).found);assert(!compare({...input,minutes:73},`${key}: exceeded 72-minute threshold`).found);
 }
-for(const key of ['rate11Days','rate15Days','doubleEndDays'])for(const value of [0,-1,0.001,1.231,99999.01,NaN,Infinity,'154',true,[],{}]){
-  assert.throws(()=>solve({minutes:0,rate:5,cards:[],counts:[],limits:{[key]:value}}),/上限须为0.01～99999天/);
-}
-for(const limits of ['',[],true,1])assert.throws(()=>solve({minutes:0,rate:5,cards:[],counts:[],limits}),/倍率上限设置无效/);
+const doubleDecimal=compare({minutes:72,rate:10,cards:[{minutes:5,rate:5}],counts:[1],limits:{doubleBeforeDays:0.05}},'double exact decimal before threshold can still convert');assert.equal(doubleDecimal.rate,5);assert.equal(doubleDecimal.minutes,149);
+const doubleDecimalOver=compare({minutes:73,rate:10,cards:[{minutes:5,rate:5}],counts:[1],limits:{doubleBeforeDays:0.05}},'double over decimal before threshold keeps locked current endpoint');assert(doubleDecimalOver.initialLocked);assert.equal(doubleDecimalOver.minutes,73);assert.equal(doubleDecimalOver.rate,10);
 
-// Overriding only 1.1/1.5 retains the default 84-day double endpoint and the 45-day lock.
-const twoCap=compare({minutes:160*DAY,rate:5,cards:[{minutes:7*DAY,rate:10},{minutes:DAY,rate:10}],counts:[1,1],mode:'final-double',limits:{rate11Days:1000,rate15Days:200}},'2x ceiling remains 84 despite large custom caps');
-assert.equal(twoCap.targetDays,84);assert.equal(twoCap.used[0],0);assert.equal(twoCap.minutes,81*DAY);
-const isLocked=compare({minutes:60*DAY,rate:10,cards:[{minutes:DAY,rate:5}],counts:[1],mode:'daily-double',maxRouteDays:1,limits:{rate11Days:0.01,rate15Days:0.01}},'custom caps cannot reopen locked initial 2x');
-assert(isLocked.initialLocked);assert.equal(isLocked.route.length,0);assert.equal(isLocked.days.length,0);
-const unaffected12=compare({minutes:200*DAY,rate:2,cards:[{minutes:DAY,rate:10}],counts:[1],limits:{rate11Days:0.01,rate15Days:0.01}},'custom limits do not invent a 1.2x cap');assert.equal(unaffected12.minutes,41*DAY);
-assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:14*DAY,rate:10}],counts:[0],limits:{rate11Days:99999,rate15Days:99999}}),/2倍卡时长最多7天/);
+// Current default double endpoint is 88; explicit former 84 remains supported.
+const eightyEight={minutes:162*DAY,rate:5,cards:[{minutes:7*DAY,rate:10}],counts:[1],mode:'final-double'};
+assert.equal(compare(eightyEight,'default 88-day double endpoint').minutes,88*DAY);
+assert(!compare({...eightyEight,limits:{doubleEndDays:84}},'explicit 84-day double endpoint').found);
+const aboveDefault={minutes:166*DAY,rate:5,cards:[{minutes:7*DAY,rate:10}],counts:[1],limits:{rate15Days:170}};
+assert(!compare(aboveDefault,'90-day endpoint exceeds default 88').found);
+assert.equal(compare({...aboveDefault,limits:{rate15Days:170,doubleEndDays:92}},'custom double endpoint permits 90 days').minutes,90*DAY);
+const lowerEnd=compare({minutes:154*DAY,rate:5,cards:[{minutes:7*DAY,rate:10},{minutes:DAY,rate:10}],counts:[1,1],mode:'final-double',limits:{doubleEndDays:80}},'lower double endpoint selects a shorter card');assert.equal(lowerEnd.minutes,78*DAY);assert.equal(lowerEnd.used[0],0);
+const locked89={minutes:89*DAY,rate:10,cards:[{minutes:DAY,rate:5}],counts:[1],maxRouteDays:1};
+assert.equal(compare(locked89,'locked initial above current end ceiling').reason,'locked-above-limit');
+const kept89=compare({...locked89,limits:{doubleEndDays:90}},'raised endpoint keeps locked initial but never reopens it');assert.equal(kept89.minutes,89*DAY);assert.equal(kept89.route.length,0);
+const exactEnd={minutes:670,rate:1,cards:[{minutes:5,rate:10}],counts:[1],limits:{doubleEndDays:0.05}};
+assert.equal(compare(exactEnd,'exact decimal double endpoint').minutes,72);assert(!compare({...exactEnd,minutes:671},'decimal double endpoint excess').found);
 
-const daysInput={minutes:0,rate:5,cards:[{minutes:5,rate:5},{minutes:DAY,rate:10}],counts:[11,1]};
-for(const mode of ['longest','final-double','daily-double'])for(const dayCardsOnly of [false,true])for(const maxRouteDays of [1,2]){
-  const input={...daysInput,mode,dayCardsOnly,maxRouteDays,limits:{rate11Days:0.29,rate15Days:0.1}};
-  const r=compare(input,`${mode} × day-only=${dayCardsOnly} × route-days=${maxRouteDays}`);
-  if(!dayCardsOnly)assert.equal(r.used[0],maxRouteDays===1?9:11);else assert.equal(r.used[0],0);
+for(const key of Object.keys(DEFAULTS)){
+  for(const value of [0.01,0.29,1.23,99999])assert.equal(compare({...empty,limits:{[key]:value}},`${key}: valid decimal`).limits[key],value);
+  for(const value of [0,-1,0.001,1.231,99999.01,NaN,Infinity,'154',true,[],{}])assert.throws(()=>solve({...empty,limits:{[key]:value}}),/上限须为0.01～99999天/);
 }
-const immutable=Object.freeze({minutes:0,rate:5,cards:Object.freeze([{minutes:DAY,rate:5}].map(Object.freeze)),counts:Object.freeze([1]),limits:Object.freeze({rate11Days:0.29,rate15Days:162.25}),mode:'longest',maxRouteDays:1});
-compare(immutable,'frozen custom-limit input');
-
-// Configurable DOUBLE endpoint is distinct from card length, multiplier locks,
-// and the per-rate 1.1/1.5 caps. All cases below are synthetic.
-for(const value of [undefined,null,'','  ']){
-  const r=compare({...defaultCap,limits:{doubleEndDays:value}},`default double endpoint ${JSON.stringify(value)}`);
-  assert.equal(r.limits.doubleEndDays,84);
-}
-const highDouble={minutes:162*DAY,rate:5,cards:[{minutes:7*DAY,rate:10}],counts:[1],mode:'final-double'};
-assert(!compare(highDouble,'default double ceiling rejects 88-day endpoint').found);
-const raisedDouble=compare({...highDouble,limits:{doubleEndDays:90}},'raise double ceiling independently');
-assert.equal(raisedDouble.minutes,88*DAY);assert.equal(raisedDouble.targetDays,90);
-const lowerDouble=compare({minutes:154*DAY,rate:5,cards:[{minutes:7*DAY,rate:10},{minutes:DAY,rate:10}],counts:[1,1],mode:'final-double',limits:{doubleEndDays:80}},'lower double ceiling selects smaller card');
-assert.equal(lowerDouble.minutes,78*DAY);assert.equal(lowerDouble.used[0],0);
-const locked85={minutes:85*DAY,rate:10,cards:[{minutes:DAY,rate:5}],counts:[1],mode:'daily-double',maxRouteDays:1};
-assert.equal(compare(locked85,'locked initial exceeds default double ceiling').reason,'locked-above-limit');
-const keepLocked=compare({...locked85,limits:{doubleEndDays:90}},'raised double ceiling keeps locked initial without reopening it');
-assert(keepLocked.initialLocked);assert.equal(keepLocked.minutes,85*DAY);assert.equal(keepLocked.route.length,0);
-assert.equal(compare({...locked85,limits:{doubleEndDays:84.99}},'locked initial just over custom double ceiling').reason,'locked-above-limit');
-const below45=compare({minutes:40*DAY,rate:10,cards:[{minutes:DAY,rate:5}],counts:[1],limits:{doubleEndDays:1}},'double endpoint does not constrain non-double final target');
-assert.equal(below45.rate,5);assert.equal(below45.minutes,81*DAY);
-const exactDouble={minutes:670,rate:1,cards:[{minutes:5,rate:10}],counts:[1],mode:'final-double',limits:{doubleEndDays:0.05}};
-assert.equal(compare(exactDouble,'exact decimal double endpoint').minutes,72);
-assert(!compare({...exactDouble,minutes:671},'0.1 minute above custom decimal double endpoint').found);
-for(const mode of ['longest','final-double','daily-double'])for(const maxRouteDays of [1,2]){
-  const input={minutes:0,rate:5,cards:[{minutes:5,rate:10}],counts:[15],mode,maxRouteDays,limits:{rate11Days:0.29,rate15Days:0.1,doubleEndDays:0.05}};
-  const r=compare(input,`${mode} custom double ceiling × ${maxRouteDays} route days`);
-  if(mode==='longest')assert.equal(r.minutes,maxRouteDays===1?50:70);else assert.equal(r.minutes,5);
-  const filtered=compare({...input,dayCardsOnly:true},`${mode} custom double ceiling × minute filter`);
-  assert.equal(filtered.rate,5);assert.equal(filtered.route.length,0);
-}
-for(const value of [0.01,0.29,1.23,99999]){
-  const r=compare({minutes:0,rate:5,cards:[],counts:[],limits:{doubleEndDays:value}},`valid custom double limit ${value}`);
-  assert.equal(r.limits.doubleEndDays,value);
-}
-
-// Random small stocks: independent nonmemoized path/day-partition oracle.
-let seed=0x7315a;
-function rand(n){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return(seed>>>16)%n;}
+for(const limits of ['',[],true,1])assert.throws(()=>solve({...empty,limits}),/倍率上限设置无效/);
 const all=[5,DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
-const choices=[0.01,0.05,0.29,1,10,45,60,100,154,162,200,770,1000];
+assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:14*DAY,rate:10}],counts:[0],limits:{doubleEndDays:99999}}),/2倍卡时长最多7天/);
+for(const mode of ['longest','final-double','daily-double'])for(const dayCardsOnly of [false,true])for(const maxRouteDays of [1,2]){
+  const r=compare({minutes:0,rate:5,cards:[{minutes:5,rate:5},{minutes:DAY,rate:10}],counts:[11,1],mode,dayCardsOnly,maxRouteDays,limits:{rate11Days:0.29,rate12Days:1,rate13Days:1,rate15Days:0.1,doubleBeforeDays:60,doubleEndDays:90}},`${mode}: advanced settings × filter × route days`);
+  assert.equal(r.used[0],dayCardsOnly?0:maxRouteDays===1?9:11);
+}
+const immutable=Object.freeze({minutes:0,rate:5,cards:Object.freeze([{minutes:DAY,rate:5}].map(Object.freeze)),counts:Object.freeze([1]),limits:Object.freeze({rate11Days:0.29,rate12Days:390,rate13Days:263,rate15Days:162.25,doubleBeforeDays:60,doubleEndDays:88}),mode:'longest'});
+compare(immutable,'frozen advanced configuration');
+let seed=0x7816c;
+function rand(n){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return(seed>>>16)%n;}
+const choices=[0.01,0.05,0.29,1,10,45,60,100,154,162,263,390,770,1000];
 for(let i=0;i<80;i++){
   const pool=all.slice(),cards=[];for(let n=1+rand(6);n--;)cards.push(pool.splice(rand(pool.length),1)[0]);
-  const input={minutes:i%2===0?rand(200):rand(200*DAY),rate:[1,2,3,5,10][rand(5)],cards,counts:cards.map(()=>rand(2)),limits:{rate11Days:choices[rand(choices.length)],rate15Days:choices[rand(choices.length)],doubleEndDays:choices[rand(choices.length)]},dayCardsOnly:i%3===0,maxRouteDays:1+rand(2)};
-  for(const mode of ['longest','final-double','daily-double'])compare({...input,mode},`custom-random-${i}-${mode}`);
+  const limits=Object.fromEntries(Object.keys(DEFAULTS).map(k=>[k,choices[rand(choices.length)]]));
+  const input={minutes:i%3===0?rand(200):rand(420*DAY),rate:[1,2,3,5,10][rand(5)],cards,counts:cards.map(()=>rand(2)),limits,dayCardsOnly:i%4===0,maxRouteDays:1+rand(2)};
+  for(const mode of ['longest','final-double','daily-double'])compare({...input,mode},`advanced-oracle-${i}-${mode}`);
 }
 for(let i=0;i<10;i++){
-  const input={minutes:rand(20),rate:2,cards:[{minutes:5,rate:5},{minutes:DAY,rate:10},{minutes:7*DAY,rate:10}],counts:[8+rand(4),1,1],limits:{rate11Days:0.29,rate15Days:[0.03,0.05,0.1][rand(3)],doubleEndDays:[0.01,0.05,7,84,90][rand(5)]},maxRouteDays:1+rand(2)};
-  for(const mode of ['longest','final-double','daily-double'])compare({...input,mode},`custom-multiday-${i}-${mode}`);
+  const input={minutes:rand(20),rate:2,cards:[{minutes:5,rate:5},{minutes:DAY,rate:10},{minutes:7*DAY,rate:10}],counts:[8+rand(4),1,1],limits:{rate11Days:0.29,rate12Days:1,rate13Days:1,rate15Days:[0.03,0.05,0.1][rand(3)],doubleBeforeDays:45,doubleEndDays:[0.05,7,84,88,90][rand(5)]},maxRouteDays:1+rand(2)};
+  for(const mode of ['longest','final-double','daily-double'])compare({...input,mode},`advanced-multi-day-${i}-${mode}`);
 }
-console.log('PASS: current 770/162/84 defaults, explicit legacy 154, configurable double endpoints, decimal custom limits, initial/conversion/target bounds, 270 independent mode comparisons, unchanged locks/caps and route-day/filter interactions.');
+console.log('PASS: all five configurable before-use thresholds, default 88-day double endpoint, decimal boundaries, same-rate 45 rule and 270 independent advanced-setting mode comparisons.');
