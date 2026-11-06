@@ -207,7 +207,7 @@ form.addEventListener('submit', event => {
   try { localStorage.setItem('myslfbk-input', JSON.stringify(input)); } catch {}
   result.hidden = true; emptyState.hidden = false; statusBox.textContent = '正在计算最优路线…'; setBadge('计算中'); submit.disabled = true; cancel.hidden = false;
   try {
-    worker = new Worker('solver.js?v=12');
+    worker = new Worker('solver.js?v=13');
     worker.onmessage = ({ data: message }) => {
       if (message.type === 'progress') { statusBox.textContent = message.data.bestDays === null ? '正在寻找符合条件的路线…' : `正在计算，已找到约 ${message.data.bestDays.toFixed(2)} 天的可行路线…`; return; }
       stop();
@@ -271,6 +271,55 @@ async function recordVisit() {
     const data = await response.json();
     if (!Number.isSafeInteger(data.visits) || data.visits < 0) throw Error('Invalid visit count');
     counter.textContent = data.visits.toLocaleString('zh-CN');
-  } catch { counter.textContent = '暂不可用'; }
+  } catch { counter.textContent = '—'; }
 }
 recordVisit();
+
+
+function animateCommunityThanks() {
+  const note = document.querySelector('#community-note');
+  const area = note.parentElement;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let x = 4, y = 5, lastMove = 0;
+  function bounds() {
+    return { width: Math.max(4, area.clientWidth - note.offsetWidth - 4), height: Math.max(5, area.clientHeight - note.offsetHeight - 5) };
+  }
+  function place() {
+    const box = bounds();
+    x = Math.max(4, Math.min(x, box.width));
+    y = Math.max(5, Math.min(y, box.height));
+    note.style.transform = `translate(${x}px, ${y}px)`;
+  }
+  function dodge(event) {
+    if (event.pointerType !== 'mouse') return;
+    if (usageDialog.open || reducedMotion.matches) return;
+    const now = performance.now();
+    if (now - lastMove < 150) return;
+    const rect = note.getBoundingClientRect();
+    if (event.clientX < rect.left - 60 || event.clientX > rect.right + 60 || event.clientY < rect.top - 28 || event.clientY > rect.bottom + 28) return;
+    const frame = area.getBoundingClientRect(), box = bounds();
+    const px = event.clientX - frame.left, py = event.clientY - frame.top;
+    const choices = [[4, 5], [box.width, 5], [4, box.height], [box.width, box.height]];
+    function distance([cx, cy]) {
+      const dx = Math.max(cx - px, 0, px - cx - note.offsetWidth);
+      const dy = Math.max(cy - py, 0, py - cy - note.offsetHeight);
+      return dx * dx + dy * dy;
+    }
+    choices.sort((a, b) => distance(b) - distance(a) || Math.hypot(b[0] - x, b[1] - y) - Math.hypot(a[0] - x, a[1] - y));
+    [x, y] = choices[0];
+    lastMove = now;
+    place();
+  }
+  area.addEventListener('pointermove', dodge);
+  document.addEventListener('pointerdown', dodge, { passive: true });
+  new ResizeObserver(place).observe(area);
+  // Keep reduced-motion users free of continuous and reactive movement.
+  function updateMotion() {
+    area.classList.toggle('motion-paused', reducedMotion.matches);
+    if (reducedMotion.matches) { x = 4; y = 5; place(); }
+  }
+  reducedMotion.addEventListener('change', updateMotion);
+  updateMotion();
+  place();
+}
+animateCommunityThanks();
