@@ -7,7 +7,8 @@
   'use strict';
   const DAY = 1440;
   const ALLOWED_RATES = [1, 2, 3, 5, 10];
-  const ALLOWED_MINUTES = [5, DAY, 7 * DAY, 14 * DAY];
+  const ALLOWED_MINUTES = [5, DAY, 3 * DAY, 7 * DAY, 14 * DAY];
+  const MAX_CARD_TYPES = ALLOWED_MINUTES.length * ALLOWED_RATES.length - ALLOWED_MINUTES.filter(minutes => minutes > 7 * DAY).length;
   const CARDS = [
     { label: '+14天1.5倍', minutes: 14 * DAY, rate: 5 },
     { label: '+7天1.5倍', minutes: 7 * DAY, rate: 5 },
@@ -30,7 +31,7 @@
 
   function normalizeCards(input) {
     if (input.cards === undefined) return CARDS.map(card => ({ ...card }));
-    if (!Array.isArray(input.cards) || input.cards.length > 19) throw Error('卡片类型须为最多19种不同组合');
+    if (!Array.isArray(input.cards) || input.cards.length > MAX_CARD_TYPES) throw Error(`卡片类型须为最多${MAX_CARD_TYPES}种不同组合`);
     const seen = new Set();
     return input.cards.map(card => {
       if (!card || !ALLOWED_MINUTES.includes(card.minutes) || !ALLOWED_RATES.includes(card.rate)) {

@@ -77,7 +77,7 @@ for(const key of Object.keys(DEFAULTS)){
   for(const value of [0,-1,0.001,1.231,99999.01,NaN,Infinity,'154',true,[],{}])assert.throws(()=>solve({...empty,limits:{[key]:value}}),/上限须为0.01～99999天/);
 }
 for(const limits of ['',[],true,1])assert.throws(()=>solve({...empty,limits}),/倍率上限设置无效/);
-const all=[5,DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
+const all=[5,DAY,3*DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
 assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:14*DAY,rate:10}],counts:[0],limits:{doubleEndDays:99999}}),/2倍卡时长最多7天/);
 for(const mode of ['longest','final-double','daily-double'])for(const dayCardsOnly of [false,true])for(const maxRouteDays of [1,2]){
   const r=compare({minutes:0,rate:5,cards:[{minutes:5,rate:5},{minutes:DAY,rate:10}],counts:[11,1],mode,dayCardsOnly,maxRouteDays,limits:{rate11Days:0.29,rate12Days:1,rate13Days:1,rate15Days:0.1,doubleBeforeDays:60,doubleEndDays:90}},`${mode}: advanced settings × filter × route days`);

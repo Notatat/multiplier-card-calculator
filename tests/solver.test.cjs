@@ -1,8 +1,8 @@
 'use strict';
 const {assert,solve,CARDS,DAY,compare,doubleCount}=require('./before-replacement-limits.test.cjs');
-const allCards=[5,DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
-const table=compare({minutes:0,rate:5,cards:allCards,counts:allCards.map(()=>0)},'19 available card types');
-assert.equal(table.cards.length,19);
+const allCards=[5,DAY,3*DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
+const table=compare({minutes:0,rate:5,cards:allCards,counts:allCards.map(()=>0)},'24 available card types');
+assert.equal(table.cards.length,24);
 for(let i=0;i<allCards.length;i++){
   const c=allCards[i],cards=c.minutes===5&&c.rate===5?[c]:[c,{minutes:5,rate:5}],counts=cards.length===1?[2]:[1,1];
   for(const mode of ['longest','final-double','daily-double'])compare({minutes:0,rate:5,cards,counts,mode},`combination-${i}-${mode}`);
@@ -14,6 +14,18 @@ for(const mode of ['longest','final-double','daily-double']){
   const r=compare({minutes:0,rate:5,cards:[{minutes:5,rate:10},{minutes:DAY,rate:10},{minutes:7*DAY,rate:10}],counts:[1,1,1],mode},`aggregate double inventory-${mode}`);
   if(mode!=='longest'){assert.equal(r.minutes,7*DAY);assert.equal(r.route.length,1);assert.equal(doubleCount(r.cards,r.used),1);}
 }
+// Three-day cards are real solver inventory and remain available in day-only mode.
+for(const mode of ['longest','final-double','daily-double'])for(const dayCardsOnly of [false,true]){
+  const r=compare({minutes:10*DAY,rate:5,cards:[{minutes:3*DAY,rate:5},{minutes:5,rate:5},{minutes:7*DAY,rate:10}],counts:[1,1,1],mode,dayCardsOnly},`three-day 1.5 participation-${mode}-${dayCardsOnly}`);
+  assert.equal(r.used[0],1);assert.equal(r.used[1],dayCardsOnly?0:1);assert.equal(r.minutes,13.5*DAY+(dayCardsOnly?0:2.5));
+  assert.equal(r.cards[0].label,'+3天1.5倍');
+}
+for(const mode of ['longest','final-double','daily-double']){
+  const r=compare({minutes:0,rate:5,cards:[{minutes:3*DAY,rate:10},{minutes:DAY,rate:10},{minutes:7*DAY,rate:10}],counts:[2,1,1],mode},`three-day doubles share aggregate inventory-${mode}`);
+  if(mode==='longest'){assert.equal(r.minutes,14*DAY);assert.equal(doubleCount(r.cards,r.used),4);}else{assert.equal(r.minutes,7*DAY);assert.equal(doubleCount(r.cards,r.used),1);}
+}
+const threeDayDaily=compare({minutes:0,rate:5,cards:[{minutes:3*DAY,rate:10},{minutes:DAY,rate:10},{minutes:5,rate:5}],counts:[1,1,10],mode:'daily-double'},'three-day doubles can close a genuine two-day schedule');
+assert.equal(threeDayDaily.days.length,2);assert(threeDayDaily.days.every(d=>d.endsWithDouble));assert.equal(threeDayDaily.minutes,4*DAY+25);
 const smaller=compare({minutes:160*DAY,rate:5,cards:[{minutes:7*DAY,rate:10},{minutes:DAY,rate:10}],counts:[1,1],mode:'final-double',limits:{doubleEndDays:84}},'choose shorter double card to fit endpoint cap');
 assert.equal(smaller.minutes,81*DAY);assert.equal(smaller.used[0],0);
 const mixedDaily=compare({minutes:0,rate:2,cards:[{minutes:DAY,rate:10},{minutes:7*DAY,rate:10},{minutes:5,rate:5}],counts:[1,1,10],mode:'daily-double'},'multiple double durations across compact days');
@@ -28,7 +40,7 @@ for(const mode of ['longest','final-double','daily-double']){
 }
 for(const qty of [0,1])for(const mode of ['longest','final-double','daily-double'])assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:14*DAY,rate:10}],counts:[qty],mode}),/2倍卡时长最多7天/);
 assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:DAY,rate:2},{minutes:DAY,rate:2}],counts:[1,2]}),/重复/);
-assert.throws(()=>solve({minutes:0,rate:5,cards:allCards.concat(allCards[0]),counts:Array(20).fill(0)}));
+assert.throws(()=>solve({minutes:0,rate:5,cards:allCards.concat(allCards[0]),counts:Array(25).fill(0)}));
 for(const cards of [[{minutes:10,rate:2}],[{minutes:DAY,rate:4}]])assert.throws(()=>solve({minutes:0,rate:5,cards,counts:[1]}));
 for(const counts of [[],[-1],[1.2],[10000]])assert.throws(()=>solve({minutes:0,rate:5,cards:[{minutes:DAY,rate:2}],counts}));
 compare({minutes:0,rate:5,cards:[],counts:[]},'empty card table');
@@ -43,4 +55,4 @@ for(let i=0;i<90;i++){
   const input={minutes:i%3===0?rand(100):rand(420*DAY),rate:[1,2,3,5,10][rand(5)],cards,counts:cards.map(()=>rand(2)),dayCardsOnly:i%4===0};
   for(const mode of ['longest','final-double','daily-double'])compare({...input,mode},`card-oracle-${i}-${mode}`);
 }
-console.log('PASS: dynamic 19-card catalog, aggregate double strategies, minute filtering, legacy inputs and 270 independent before-limit mode comparisons.');
+console.log('PASS: dynamic 24-card catalog, aggregate double strategies, minute filtering, legacy inputs and 270 independent before-limit mode comparisons.');

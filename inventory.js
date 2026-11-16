@@ -1,6 +1,6 @@
 (function (root) {
   'use strict';
-  const DURATIONS = [5, 1440, 10080, 20160];
+  const DURATIONS = [5, 1440, 4320, 10080, 20160];
   const RATES = [1, 2, 3, 5, 10];
   const LEGACY_CARDS = [
     { minutes: 20160, rate: 5 }, { minutes: 10080, rate: 5 },
@@ -30,7 +30,7 @@
   function restore(saved) {
     if (!saved || !Number.isSafeInteger(saved.minutes) || saved.minutes < 0 || !Array.isArray(saved.counts)) return null;
     const cards = saved.cards === undefined ? LEGACY_CARDS : saved.cards;
-    if (!Array.isArray(cards) || cards.length !== saved.counts.length || cards.length > 20) return null;
+    if (!Array.isArray(cards) || cards.length !== saved.counts.length || cards.length > DURATIONS.length * RATES.length) return null;
     try {
       const inventory = normalizeRows(cards.map((card, i) => ({ minutes: card.minutes, rate: card.rate, count: saved.counts[i] })), true);
       return { ...saved, ...inventory, needsCardReview: inventory.cards.some(card => card.rate === 10 && card.minutes > 10080) };

@@ -207,7 +207,7 @@ form.addEventListener('submit', event => {
   try { localStorage.setItem('myslfbk-input', JSON.stringify(input)); } catch {}
   result.hidden = true; emptyState.hidden = false; statusBox.textContent = '正在计算最优路线…'; setBadge('计算中'); submit.disabled = true; cancel.hidden = false;
   try {
-    worker = new Worker('solver.js?v=15');
+    worker = new Worker('solver.js?v=16');
     worker.onmessage = ({ data: message }) => {
       if (message.type === 'progress') { statusBox.textContent = message.data.bestDays === null ? '正在寻找符合条件的路线…' : `正在计算，已找到约 ${message.data.bestDays.toFixed(2)} 天的可行路线…`; return; }
       stop();

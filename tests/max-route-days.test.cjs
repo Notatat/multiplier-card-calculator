@@ -28,7 +28,7 @@ assert.equal(solve({minutes:89*DAY,rate:10,cards:[],counts:[],maxRouteDays:1}).r
 assert.equal(solve({minutes:500*DAY,rate:2,cards:[{minutes:DAY,rate:10}],counts:[1],maxRouteDays:1}).reason,'energy-limit');
 let seed=0x8917b;
 function rand(n){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return(seed>>>16)%n;}
-const all=[5,DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
+const all=[5,DAY,3*DAY,7*DAY,14*DAY].flatMap(minutes=>[1,2,3,5,10].map(rate=>({minutes,rate}))).filter(c=>c.rate!==10||c.minutes<=7*DAY);
 for(let i=0;i<65;i++){
   const pool=all.slice(),cards=[];for(let n=1+rand(6);n--;)cards.push(pool.splice(rand(pool.length),1)[0]);
   const input={minutes:i%3===0?rand(150):rand(420*DAY),rate:[1,2,3,5,10][rand(5)],cards,counts:cards.map(()=>rand(2)),dayCardsOnly:i%3===0,maxRouteDays:1+rand(2)};
